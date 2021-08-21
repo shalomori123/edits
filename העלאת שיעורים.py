@@ -1,5 +1,6 @@
 import os
 import shutil
+from re import match
 
 CURRENT_YEAR = "התשפ''א"
 ALEPHBET = ('א','ב','ג','ד','ה','ו','ז','ח','ט','י',
@@ -7,6 +8,148 @@ ALEPHBET = ('א','ב','ג','ד','ה','ו','ז','ח','ט','י',
             'כא','כב','כג','כד','כה','כו','כז','כח','כט','ל',
             'לא','לב','לג','לד','לה','לו','לז','לח','לט','מ',
             'מא','מב','מג','מד','מה')
+
+RAV_NAMES = [["מרן רה''י", "מרן", "הרב שבתי סבתו", "הרב סבתו", "הרב שבתי"],
+             ["רה''י הרב יצחק", "רהי", "רה''י", "הרב יצחק", "הרב יצחק סבתו", "יצחק"],
+             ["הרב אחיה סנדובסקי", "הרב אחיה", "הרב סנדובסקי", "אחיה", "סנדובסקי"],
+             ["הרב אליהו דורדק", "הרב אלי דורדק", "הרב אלי", "הרב דורדק", "דורדק"],
+             ["הרב אליסף יעקבסון", "הרב אליסף", "הרב יעקבסון", "הרב יעקובסון", "הרב אליסף יעקובסון", "יעקבסון"],
+             ["הרב גבריאל גולדמן", "הרב גולדמן", "גולדמן"],
+             ["הרב חיים גרינשפן", "הרב גרינשפן", "הגרח", "הגר''ח", "גרח", "גר''ח", "גרינשפן"],
+             ["הרב חיים סבתו", "הרב חיים", "חיים"],
+             ["הרב חן חלמיש", "הרב חן", "חן"],
+             ["הרב יובל אהרוני", "הרב יובל", "יובל"],
+             ["הרב יוסף מימון", "הרב יוסף", "יוסף"],
+             ["הרב יעקב חזן", "הרב חזן", "חזן"],
+             ["הרב יעקב סבתו", "הרב יעקב", "יעקב"],
+             ["הרב יצחק חי זאגא", "הרב יצחק זאגא", "הרב זאגא", "זאגא"],
+             ["הרב צבי אליהו סקולניק", "הרב צביאלי סקולניק", "הרב צביאלי", "הרב סקולניק", "צביאלי"],
+             ["הרב צדוק אליאס", "הרב צדוק", "צדוק"],
+             ["הרב ראובן פיירמן", "הרב פיירמן", "פיירמן"],
+             ["הרב ראובן ששון", "הרב ראובן", "ראובן"]]
+
+class Lesson:
+        """class to define one file of record."""
+        def __init__(self, dir, file_name):
+                self.dir = dir
+                self.fname = file_name
+                self.path = self.dir + self.fname
+                self.index_letter = ''
+                self.rav = ''
+                self.rav_dir = ''
+                self.topic = ''
+                self.day = ''
+                self.month = ''
+                self.year = CURRENT_YEAR
+                self.date = self.day + ' ' + self.month + ' ' + self.year
+                self.title = ''
+                self.extension = os.path.splitext(self.path)[1]
+                self.name = ' - '.join([self.index_letter + self.rav, self.topic, self.date, self.title])
+
+        def listen(self):
+                open_file = open(self.path, 'rb+')
+                print('האזן לשיעור')
+                os.startfile(self.path)
+                open_file.close()
+
+        def delete_file(self):
+                os.remove(self.path)
+                print('הקובץ נמחק.')
+
+        def copy_file(self, to_dir):
+                shutil.copy2(self.path, to_dir + self.fname)
+
+        def move_file(self, to_dir):
+                self.copy_file(to_dir)
+                self.delete_file()
+                self.dir = to_dir
+
+
+        def parse_name(self):
+                pass
+
+        def change_name(self, name=None):
+                if name is None:
+                        name = self.name
+                os.rename(self.path, self.dir + name)
+                print('שם הקובץ שונה.')
+                self.fname = name
+
+        def set_rav(self, short_name, directory4):
+                self.rav = self.full_rav_name(short_name)
+                self.rav_dir = self.rav_directory(self.rav, directory4)
+
+        def full_rav_name(self, short_name):
+                while True:
+                        for list in RAV_NAMES:
+                                if short_name in list:
+                                        return list[0]
+                        other_rav = input("השם שכתבת אינו מופיע ברשימה. האם זה השם הנכון? (כן/כלום) ")
+                        if other_rav == "כן":
+                            return short_name
+                        short_name = input("בחר שם חדש: ")
+
+        def rav_directory(self, rav, directory4):
+                if rav == "מרן רה''י":
+                        return directory4 + "\מרן רה''י - הרב שבתי סבתו"
+                elif rav == "רה''י הרב יצחק":
+                        return directory4 + "\רה''י - הרב יצחק סבתו"
+                else:
+                        return directory4 + "\\" + rav
+
+        def set_topic(self):
+                if os.path.isdir(self.rav_dir):
+                        rav_directories = next(os.walk(self.rav_dir))[1]
+                        rav_directories.append("אחר")
+                        for i in range(len(rav_directories)):
+                                if "עיון" in rav_directories[i]:
+                                        rav_directories[i] = "עיון"
+                                if rav_directories[i] == "כולל - הלכות נידה":
+                                        rav_directories[i] = "הלכות נידה"
+
+                        for count, item in enumerate(rav_directories, 1):
+                                print(str(count) + ". " + item)
+                        choose_num = input("בחר מספר: ")
+                        while not choose_num.isnumeric() or int(choose_num) > len(rav_directories):
+                                choose_num = input("בחר מספר: ")
+                        if int(choose_num) < len(rav_directories):
+                                self.topic = rav_directories[int(choose_num) - 1]
+                        elif int(choose_num) == len(rav_directories):
+                                enter_topic = input("נושא כללי: ")
+                                self.topic = enter_topic
+                else:
+                        enter_topic = input("נושא כללי: ")
+                        self.topic = enter_topic
+
+        def set_day(self, day):
+                if len(day.split(' ')[-1]) == 1:
+                        self.day = day + "'"
+                else:
+                        self.day = day[:-1] + "''" + day[-1]
+
+        def set_month(self, month):
+                self.month = month
+
+        def set_title(self, title):
+                self.title = title
+
+        def set_index(self):
+                if os.path.isdir(self.rav_dir + '/' + self.topic):
+                        check_prev = os.listdir(self.rav_dir + '/' + self.topic) # הוספת אות האינדקס בתחילת שם הקובץ
+                        check_prev.sort()
+                        prev_index = check_prev[-1].split(" - ", 1)[0]
+                        # TODO parse_name method
+                        # prev_lesson = Lesson(lesson.rav_dir + '/' + lesson.topic, check_prev[-1])
+                        # prev_lesson.parse_name()
+                        # prev_index = prev_lesson.index_letter
+                        index_letter = "א"
+                        for counter, letter in enumerate(ALEPHBET):
+                                if letter == prev_index:
+                                        self.index_letter = ALEPHBET[counter + 1] + ' - '
+                        if index_letter == "א - ":
+                                print("\n\n\nשים לב! האות התחילית בתיקיית %s היא א'! תקן זאת בהקדם!\n\n\n\n" % \
+                                      (self.rav_dir + '/' + self.topic))
+
 
 
 def copy_to_edit(directory1, directory2):
@@ -37,144 +180,67 @@ def define_recorder():
         return directory1
 
 
-def full_rav_name(rav, directory4):
-        short_names = [["מרן רה''י", "מרן", "הרב שבתי סבתו", "הרב סבתו", "הרב שבתי"],
-                       ["רה''י הרב יצחק", "רהי", "רה''י", "הרב יצחק", "הרב יצחק סבתו", "יצחק"],
-                       ["הרב אחיה סנדובסקי", "הרב אחיה", "הרב סנדובסקי", "אחיה", "סנדובסקי"],
-                       ["הרב אליהו דורדק", "הרב אלי דורדק", "הרב אלי", "הרב דורדק", "דורדק"],
-                       ["הרב אליסף יעקבסון", "הרב אליסף", "הרב יעקבסון", "הרב יעקובסון", "הרב אליסף יעקובסון", "יעקבסון"],
-                       ["הרב גבריאל גולדמן", "הרב גולדמן", "גולדמן"],
-                       ["הרב חיים גרינשפן", "הרב גרינשפן", "הגרח", "הגר''ח", "גרח", "גר''ח", "גרינשפן"],
-                       ["הרב חיים סבתו", "הרב חיים", "חיים"],
-                       ["הרב חן חלמיש", "הרב חן", "חן"],
-                       ["הרב יובל אהרוני", "הרב יובל", "יובל"],
-                       ["הרב יוסף מימון", "הרב יוסף", "יוסף"],
-                       ["הרב יעקב חזן", "הרב חזן", "חזן"],
-                       ["הרב יעקב סבתו", "הרב יעקב", "יעקב"],
-                       ["הרב יצחק חי זאגא", "הרב יצחק זאגא", "הרב זאגא", "זאגא"],
-                       ["הרב צבי אליהו סקולניק", "הרב צביאלי סקולניק", "הרב צביאלי", "הרב סקולניק", "צביאלי"],
-                       ["הרב צדוק אליאס", "הרב צדוק", "צדוק"],
-                       ["הרב ראובן פיירמן", "הרב פיירמן", "פיירמן"],
-                       ["הרב ראובן ששון", "הרב ראובן", "ראובן"]]
-        name_exist = False
-        for list in short_names:
-                if rav in list:
-                        name_exist = True
-        while not name_exist:
-                other_rav = input("השם שכתבת אינו מופיע ברשימה. האם זה השם הנכון? ")
-                if other_rav == "כן":
-                        return rav
-                rav = input("בחר שם חדש: ")
-                name_exist = False
-                for list in short_names:
-                        if rav in list:
-                                name_exist = True
-        for i, list in enumerate(short_names):
-                if rav in list:
-                        full = list[0]
-        return full
-
-
-def rav_directory(rav, directory4):
-        if rav == "מרן רה''י":
-                return directory4 + "\מרן רה''י - הרב שבתי סבתו"
-        elif rav == "רה''י הרב יצחק":
-                return directory4 + "\רה''י - הרב יצחק סבתו"
-        else:
-                return directory4 + "\\" + rav
-
-
-def choose_topic(rav, directory4):
-        if os.path.isdir(rav_directory(rav, directory4)):
-                rav_directories = next(os.walk(rav_directory(rav, directory4)))[1]
-                rav_directories.append("אחר")
-                for i in range(len(rav_directories)):
-                        if "עיון" in rav_directories[i]:
-                                rav_directories[i] = "עיון"
-                        if rav_directories[i] == "כולל - הלכות נידה":
-                                rav_directories[i] = "הלכות נידה"
-                
-                for count, item in enumerate(rav_directories, 1):
-                        print(str(count) + ". " + item)
-                choose_num = input("בחר מספר: ")
-                while not choose_num.isnumeric() or int(choose_num) > len(rav_directories):
-                        choose_num = input("בחר מספר: ")
-                if int(choose_num) < len(rav_directories):
-                        return rav_directories[int(choose_num) - 1]
-                elif int(choose_num) == len(rav_directories):
-                        enter_topic = input("נושא כללי: ")
-                        return enter_topic
-        else:
-                enter_topic = input("נושא כללי: ")
-                return enter_topic
-
-
 def edit_names(directory2, directory4, month):
         for file in os.listdir(directory2):
-                open_file = open(directory2 + file, 'rb+')
-                print('האזן לשיעור') # פתיחת הקובץ
-                os.startfile(directory2 + file)
-                open_file.close()
+                lesson = Lesson(directory2, file)
+                lesson.listen()
                 
-                is_valid_file = input('האם השיעור תקין? ') # בדיקה אם למחוק את הקובץ או לדלג עליו
+                is_valid_file = input('האם השיעור תקין? (לא/דלג/כלום) ') # בדיקה אם למחוק את הקובץ או לדלג עליו
+                if is_valid_file == "דלג":
+                        continue
                 if is_valid_file == 'לא':
                         statinfo = os.stat(directory2 + file)
                         print('גודל הקובץ: ' + str(statinfo.st_size / 1000000) + 'Mb')
-                        to_remove = input('האם למחוק אותו? ')
+                        to_remove = input('האם למחוק אותו? (כן/כלום) ')
                         if to_remove == 'כן':
-                                os.remove(directory2 + file)
-                                print('הקובץ נמחק.')
-                        continue
+                                lesson.delete_file()
+                                continue
                         
                 lesson_title = input("נושא השיעור: ") # שינוי השם עצמו
+                lesson.set_title(lesson_title)
+
                 day_in_month = input("תאריך (היום בחודש בלבד בלי מרכאות, אם לא הגדרת חודש בהתחלה הוסף אותו עכשיו): ")
-                if len(day_in_month) == 1:
-                        fixed_day = day_in_month + "'"
-                elif day_in_month[1] == " ":
-                        fixed_day = day_in_month[0] + "'" + day_in_month[1:]
+                split_day = day_in_month.split(' ')
+                if match('[ט-ל][א-ט]', split_day[0]):
+                        fixed_day = split_day[0]
+                        if len(split_day) > 1:
+                                month = split_day[1]
+                elif match('[ט-ל][א-ט]', split_day[1]):
+                        fixed_day = ' '.join(split_day[:-1])
+                        if len(split_day) > 2:
+                                month = split_day[-1]
                 else:
-                        fixed_day = day_in_month[0] + "''" + day_in_month[1:]
+                        fixed_day = day_in_month
+                lesson.set_day(fixed_day)
+                lesson.set_month(month)
+
                 short_rav_name = input('שם הרב: ')
-                rav_name = full_rav_name(short_rav_name, directory4)
-                general_topic = choose_topic(rav_name, directory4)
-                extension = os.path.splitext(directory2 + file)[1]
-                name = rav_name + ' - ' + general_topic + ' - ' + fixed_day + month + " " + CURRENT_YEAR + ' - ' + lesson_title + extension
-                os.rename(directory2 + file, directory2 + name)
-                print('שם הקובץ שונה.\nהבא בתור:')
+                lesson.set_rav(short_rav_name, directory4)
+                lesson.set_topic()
+
+                lesson.change_name()
 
 
 def cut_at_the_end(directory2, directory3, directory4):
-        to_move = input('כל השמות שונו, האם להעביר לתיקיות? ')
+        to_move = input('כל השמות שונו, האם להעביר לתיקיות? (כן) ')
         input("סגור את הנגן.")
         while to_move != 'כן':
-                to_move = input('האם להעביר לתיקיות? ')
-        delete_old = input("האם לפנות את תיקיית שיעורים מהשבוע האחרון? ") # פינוי תיקיית שיעורים מהשבוע האחרון
+                to_move = input('האם להעביר לתיקיות? (כן) ')
+        delete_old = input("האם לפנות את תיקיית שיעורים מהשבוע האחרון? (כן/כלום) ") # פינוי תיקיית שיעורים מהשבוע האחרון
         if delete_old == "כן":
                 for old_file in os.listdir(directory3):
                         os.remove(directory3 + old_file)
         for file in os.listdir(directory2):
-                open_file = open(directory2 + file, 'rb+')
-                shutil.copy2(directory2 + file, directory3 + file)
-                open_file.close()
+                lesson = Lesson(directory2, file)
+                lesson.copy_file(directory3)
                 
-                name_list = file.split(' - ')# העברה לתיקיות של כל רב ורב אם אפשר ואם לא לתיקיית השנה
-                if os.path.isdir(rav_directory(name_list[0], directory4) + '/' + name_list[1]):
-                        check_prev = os.listdir(rav_directory(name_list[0], directory4) + '/' + name_list[1]) # הוספת אות האינדקס בתחילת שם הקובץ
-                        check_prev.sort()
-                        prev_index = check_prev[-1].split(" - ", 1)[0]
-                        index_letter = "א"
-                        for index, letter in enumerate(ALEPHBET):
-                                if letter == prev_index:
-                                        index_letter = ALEPHBET[index + 1]
-                        if index_letter == "א":
-                                print("\n\n\nשים לב! האות התחילית בתיקיית %s היא א'! תקן זאת בהקדם!\n\n\n\n" % rav_directory(name_list[0]))
-                        shutil.copy2(directory2 + file, rav_directory(name_list[0], directory4) + '/' + name_list[1] + "/" + index_letter + " - " + file)
-                        """החלטתי לבטל את ההעברה לתיקיית הרב אם אי אפשר לתוך נושא ספציפי כדי לרכז הכל בתיקיית השנה:
-                        elif os.path.isdir(directory4 + '/' + name_list[0]):
-                        os.replace(directory2 + "/" + file, rav_directory(name_list[0]) + "/" + file)"""
+                # העברה לתיקיות של כל רב ורב אם אפשר ואם לא לתיקיית השנה
+                lesson.set_index()
+                lesson.change_name()
+                if os.path.isdir(lesson.rav_dir + '/' + lesson.topic):
+                        lesson.move_file(lesson.rav_dir + '/' + lesson.topic)
                 else:
-                        shutil.copy2(directory2 + file, directory4 + file)
-                os.remove(directory2 + file)
+                        lesson.move_file(directory4)
                 print('הקובץ %s הועבר והועתק בהצלחה' % file)
         print('כל הקבצים הועתקו בהצלחה!')
 
@@ -203,8 +269,6 @@ def main():
                 copy_to_edit(directory1, directory2)
         
         current_month = input('מה החודש עכשיו? (אם משתנה נא להשאיר ריק) ')
-        if current_month:
-                current_month = " " + current_month
         
         edit_names(directory2, directory4, current_month)
         cut_at_the_end(directory2, directory3, directory4)
