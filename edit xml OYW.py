@@ -1,55 +1,59 @@
-import json
 import re
-from os.path import isfile
+from os import chdir
+from tempfile import NamedTemporaryFile
+import subprocess
+import xml.etree.ElementTree as ET
+
+import requests
 
 from ALEPHBET import ALEPHBET
 
 
-def get_path(path = ''):
-	while not isfile(path):
-		if path:
-			print('wrong path!')
-		path = input('put the path to json file: ')
-	return path
-
-def join_paragraphs(lst):
-	return '\n\n'.join(lst)
+def get_file(link=''):
+	while not link:
+		link = input('put the link to xml file: ')
+	headers = {'user-agent': 'mozilla/5.0 (macintosh; intel mac os x 10_15_7) applewebkit/537.36 (khtml, like gecko) chrome/102.0.0.0 safari/537.36'}
+	res = requests.get(link, headers=headers)
+	if res.status_code != 200:
+		raise Exception('Connection Error. status code:', res.status_code)
+	return res.text
 
 def creat_page(title, text):
 	return {'title': title, 'text': text}
 
-def join_to_list(page, lst):
-	lst.append(page)
-
-def change_format(dict_item, book_name):
+def change_format(root, book_name, by_sections=True):
 	"""
-	input: the book content in sefaria json format.
+	input: the book content on OYW xml format.
 	output: list of pages to upload to wikisource, that any page is dict with two attributes - title and text.
-	exception: when the json have more than two levels of content.
 	"""
 	pages = []
-	for part in dict_item.keys():
-		content = dict_item[part]
-		if len(content) and not all(isinstance(x, str) for x in content) and not (isinstance(content[0], list) and all(isinstance(x, str) for x in content[0])):
-			raise TypeError(f'json["text"]["{part}"][0] is not str and not list of strs')
-		
-		if part == '':
-			title = book_name
-		else:
-			title = book_name + '/' + part
-		
-		if all(isinstance(x, str) for x in content):
-			text = join_paragraphs(content)
+	if by_sections:
+		for chap in root:
+			part = chap.attrib['n'].strip()
+			text = '==' + part + '==\n' + ''.join(chap.itertext()).strip('\n')
+			
+			if part == '':
+				title = book_name
+			else:
+				title = book_name + '/' + part
 			page = creat_page(title, text)
 			if text:
-				join_to_list(page, pages)
-			continue
+				pages.append(page)
 		
-		for i,perek in enumerate(content):
-			text = join_paragraphs(content[i])
-			page = creat_page(title + '/' + ALEPHBET[i+1], text)
-			if text:
-				join_to_list(page, pages)
+	else:
+		full_text = ''
+		iterator = iter(range(1, 1000))
+		for chap in root:
+			part = chap.attrib['n'].strip()
+			text = '==' + part + '==\n' + ''.join(chap.itertext()).strip('\n')
+			full_text += text+'\n'
+			
+			if len(full_text) > 100000:
+				page = creat_page(book_name+'/'+str(next(iterator)), full_text)
+				pages.append(page)
+				full_text = ''
+		page = creat_page(book_name+'/'+str(next(iterator)), full_text)
+		pages.append(page)
 	return pages
 
 
@@ -72,14 +76,14 @@ def edit_spaces(text):
 		text = text.replace('׃', ':')
 	while ' :' in text:
 		text = text.replace(' :', ':')
-	while '  ' in text:
-		text = text.replace('  ', ' ')
 	while ' .' in text:
 		text = text.replace(' .', '.')
 	while ' ,' in text:
 		text = text.replace(' ,', ',')
 	while ' ;' in text:
 		text = text.replace(' ;', ';')
+	while '  ' in text:
+		text = text.replace('  ', ' ')
 	
 	return text
 
@@ -160,13 +164,15 @@ def add_sources(text):
 "שמואל א'", "שמואל ב'", "מלכים א'", "מלכים ב'", "דברי הימים א'", "דברי הימים ב'"
 "ישעי'", "ירמי'", "ד\"ה א'", "ד\"ה ב'", "ד\"ה א", "ד\"ה ב"]
 		books_reg = '(' + '|'.join(books) + ')'
+		#book inside ()
 		perek_regex = '\('+books_reg+',? (?:פ[\'׳] |פרק |פ[״"]?|)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט])),?'
-		text = re.sub(perek_regex+'\)', '{{מ"מ|\\1|\\3\\4\\5\\6|ק={{שם הדף}}}}', text)
+		text = re.sub(perek_regex+'\)', '{{מ"מ|\\1|\\3\\4\\5\\6}}', text)
 		text = re.sub(perek_regex+'[ :](?:פס[\'׳] |פסוק |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '{{מ"מ|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11|ק={{שם הדף}}}}', text)
 		text = re.sub(perek_regex+'[ :](?:פס[\'׳] |פסוקים |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט])) ?- ?((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '{{הפניה לפסוקים|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11|\\13\\14\\15\\16}}', text)
-
+		
+		#book outside ()
 		perek_regex = books_reg+' \((?:פ[\'׳] |פרק |פ[״"]?|)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט])),?'
-		text = re.sub(perek_regex+'\)', '\\1 {{מ"מ|\\1|\\3\\4\\5\\6|ק={{שם הדף}}}}', text)
+		text = re.sub(perek_regex+'\)', '\\1 {{מ"מ|\\1|\\3\\4\\5\\6}}', text)
 		text = re.sub(perek_regex+'[: ](?:פס[\'׳] |פסוק |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '\\1 {{מ"מ|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11|ק={{שם הדף}}}}', text)
 		text = re.sub(perek_regex+'[: ](?:פס[\'׳] |פסוקים |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט])) ?- ?((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '\\1 {{הפניה לפסוקים|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11|\\13\\14\\15\\16}}', text)
 		return text
@@ -193,14 +199,6 @@ def add_sources(text):
 	text = midrash(text)
 	return text
 	
-	
-def edit_footnotes(text):
-	if '<sup>' in text and '<i class="footnote">' in text:
-		text = text.replace('<sup>', ' {{הערה|')
-		text = text.replace('</sup>', '')
-		text = text.replace('<i class="footnote">', '\'\'\'הערת המדפיס:\'\'\' ')
-		text = text.replace('</i>', '}}')
-	return text
 
 def edit_html_to_wiki(text):
 	if '<br>' in text:
@@ -214,7 +212,6 @@ def edit_page(page_text):
 	new_text = page_text
 	new_text = edit_spaces(new_text)
 	new_text = add_sources(new_text)
-	new_text = edit_footnotes(new_text)
 	new_text = edit_html_to_wiki(new_text)
 	return new_text
 
@@ -225,13 +222,8 @@ def edit_pages(pages):
 		new_pages.append(page)
 	return new_pages
 
-def edit_titles(pages, schema={}):
+def edit_titles(pages):
 	print('titles edit:')
-	if schema:
-		for title in schema['nodes']:
-			for page in pages:
-				page['title'] = page['title'].replace(title['enTitle'], title['heTitle'])
-		
 	titles = [page['title'] for page in pages]
 	titles_str = '|'.join(titles)
 	while re.search('[a-zA-Z]', titles_str):
@@ -245,7 +237,7 @@ def edit_titles(pages, schema={}):
 		titles_str = '|'.join(titles)
 	
 	print('titles:\n', titles)
-	input_to_edit = input('Do you want to edit (also) hebrew titles? (y/n) ')
+	input_to_edit = input('Do you want to edit titles? (y/n) ')
 	if input_to_edit in ['y', 'Y']:
 		to_edit = True
 	else:
@@ -285,33 +277,27 @@ def upload_pwb(pages, pwb_dir):
 	if ask in ['n', 'N', 'לא']:
 		print(pages)
 		return
-		
-	import tempfile
-	import subprocess
-	from os import chdir
 	
-	temp_file = tempfile.NamedTemporaryFile(mode='w+', suffix='.txt')
+	temp_file = NamedTemporaryFile(mode='w+', suffix='.txt')
 	for page in pages:
 		file_format = "{{-start-}}\n'''" + page['title'] + "'''\n" + page['text'] + "\n{{-stop-}}\n"
 		temp_file.write(file_format)
 	
 	chdir(pwb_dir)
 	subprocess.run(['python', 'pwb.py', 'pagefromfile', '-file:'+temp_file.name, '-notitle', '-autosummary', '-showdiff'])
-	
 	temp_file.close()
 	
 	
 def main():
-	#path = get_path('/storage/emulated/0/download/Netivot Olam - he - OYW.json')
-	path = get_path('/storage/emulated/0/download/Gevurot Hashem - he - OYW.json')
+	file = get_file(link='http://mobile.tora.ws/xml/15301.xml')
 	
-	with open(path, "r") as read_file:
-		data = json.load(read_file)
+	root = ET.fromstring(file) #./book/chap/p/d
+	book_name = root.attrib['n'].replace('ספר', '').strip()
+	pages = change_format(root, book_name, by_sections=False)
+	#print(pages[:2])
 	
-	book_name = data['schema']['heTitle']
-	pages = change_format(data['text'], book_name)
 	pages = edit_pages(pages)
-	pages = edit_titles(pages, data['schema'])
+	pages = edit_titles(pages)
 	pages = add_navigation(pages)
 	upload_pwb(pages, pwb_dir='/storage/emulated/0/python/pywikibot')
 
