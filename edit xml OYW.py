@@ -166,15 +166,15 @@ def add_sources(text):
 		books_reg = '(' + '|'.join(books) + ')'
 		#book inside ()
 		perek_regex = '\('+books_reg+',? (?:פ[\'׳] |פרק |פ[״"]?|)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט])),?'
-		text = re.sub(perek_regex+'\)', '{{מ"מ|\\1|\\3\\4\\5\\6}}', text)
-		text = re.sub(perek_regex+'[ :](?:פס[\'׳] |פסוק |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '{{מ"מ|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11|ק={{שם הדף}}}}', text)
-		text = re.sub(perek_regex+'[ :](?:פס[\'׳] |פסוקים |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט])) ?- ?((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '{{הפניה לפסוקים|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11|\\13\\14\\15\\16}}', text)
+		text = re.sub(perek_regex+'\)', '{{הפ|\\1|\\3\\4\\5\\6}}', text)
+		text = re.sub(perek_regex+'[ :](?:פס[\'׳] |פסוק |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '{{הפ|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11}}', text)
+		text = re.sub(perek_regex+'[ :](?:פס[\'׳] |פסוקים |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט])) ?- ?((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '{{הפ|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11|\\13\\14\\15\\16}}', text)
 		
 		#book outside ()
 		perek_regex = books_reg+' \((?:פ[\'׳] |פרק |פ[״"]?|)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט])),?'
-		text = re.sub(perek_regex+'\)', '\\1 {{מ"מ|\\1|\\3\\4\\5\\6}}', text)
-		text = re.sub(perek_regex+'[: ](?:פס[\'׳] |פסוק |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '\\1 {{מ"מ|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11|ק={{שם הדף}}}}', text)
-		text = re.sub(perek_regex+'[: ](?:פס[\'׳] |פסוקים |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט])) ?- ?((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '\\1 {{הפניה לפסוקים|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11|\\13\\14\\15\\16}}', text)
+		text = re.sub(perek_regex+'\)', '\\1 {{הפ|\\1|\\3\\4\\5\\6}}', text)
+		text = re.sub(perek_regex+'[: ](?:פס[\'׳] |פסוק |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '\\1 {{הפ|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11}}', text)
+		text = re.sub(perek_regex+'[: ](?:פס[\'׳] |פסוקים |)((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט])) ?- ?((ק?)[״"]?([א-צ])[׳\']?|(ק?[ט-צ])[״"]?([א-ט]))\)', '\\1 {{הפ|\\1|\\3\\4\\5\\6|\\8\\9\\10\\11|\\13\\14\\15\\16}}', text)
 		return text
 	
 	def midrash(text):
@@ -243,13 +243,14 @@ def edit_titles(pages):
 	else:
 		to_edit = False
 	while to_edit:
-		current_str = input('you have to insert current pattern to replace in the titles: (to stop press enter twice)\ncurrent: ')
+		current_str = input('you have to insert current pattern to replace in the titles: (to stop press enter twice)\n\ncurrent: ')
 		required_str = input('required: ')
 		if not (current_str or required_str):
 			to_edit = False
 			break
 		for page in pages:
 			page['title'] = page['title'].replace(current_str, required_str)
+		print('titles:\n', [page['title'] for page in pages])
 	print('edit finished!')
 	return pages
 
@@ -272,7 +273,7 @@ def add_navigation(pages):
 			pass
 	return pages
 
-def upload_pwb(pages, pwb_dir):
+def upload_pwb(pages, pwb_dir, summary=None):
 	ask = input('do you want to upload this book to wikisource? (y/n) ')
 	if ask in ['n', 'N', 'לא']:
 		print(pages)
@@ -282,18 +283,31 @@ def upload_pwb(pages, pwb_dir):
 	for page in pages:
 		file_format = "{{-start-}}\n'''" + page['title'] + "'''\n" + page['text'] + "\n{{-stop-}}\n"
 		temp_file.write(file_format)
+	if summary is None:
+		summary = 'העלאה מאתר ובלכתך בדרך [mobile.tora.ws]'
 	
 	chdir(pwb_dir)
-	subprocess.run(['python', 'pwb.py', 'pagefromfile', '-file:'+temp_file.name, '-notitle', '-autosummary', '-showdiff'])
+	subprocess.run(['python', 'pwb.py', 'pagefromfile', '-file:'+temp_file.name, '-notitle', '-summary:'+summary, '-showdiff'])
 	temp_file.close()
 	
 	
 def main():
-	file = get_file(link='http://mobile.tora.ws/xml/15301.xml')
+	#file = get_file(link='http://mobile.tora.ws/xml/15301.xml')
+	#file = get_file(link='http://mobile.tora.ws/xml/500121.xml')
+	#file = get_file(link='http://mobile.tora.ws/xml/15305.xml')
+	#file = get_file(link='http://mobile.tora.ws/xml/15308.xml')
+	#file = get_file(link='http://mobile.tora.ws/xml/15307.xml')
+	#file = get_file(link='http://mobile.tora.ws/xml/15304.xml')
+	#file = get_file(link='http://mobile.tora.ws/xml/15306.xml')
+	#file = get_file(link='http://mobile.tora.ws/xml/500114.xml')
+	#file = get_file(link='http://mobile.tora.ws/xml/500117.xml')
+	#file = get_file(link='http://mobile.tora.ws/xml/500103.xml')
+	file = get_file(link='http://mobile.tora.ws/xml/16301.xml')
+	
 	
 	root = ET.fromstring(file) #./book/chap/p/d
 	book_name = root.attrib['n'].replace('ספר', '').strip()
-	pages = change_format(root, book_name, by_sections=False)
+	pages = change_format(root, book_name, by_sections=True)
 	#print(pages[:2])
 	
 	pages = edit_pages(pages)
